@@ -125,15 +125,23 @@ function upsertEpisodeToSupabase(episode, region) {
       payload: JSON.stringify(payload)
     });
     
-    if (response.getResponseCode() !== 200) {
-      console.error(`Supabase error for ${episode.episodeUri}: ${response.getContentText()}`);
+    const statusCode = response.getResponseCode();
+    const responseText = response.getContentText();
+    
+    // Supabase RPC calls can return 200 or 204 for success
+    if (statusCode === 200 || statusCode === 204) {
+      return true;
+    } else {
+      console.error(`Supabase error for ${episode.episodeUri}:`);
+      console.error(`Status Code: ${statusCode}`);
+      console.error(`Response: ${responseText}`);
+      console.error(`Payload sent:`, JSON.stringify(payload, null, 2));
       return false;
     }
     
-    return true;
-    
   } catch (error) {
     console.error(`Error upserting episode ${episode.episodeUri}:`, error);
+    console.error(`Error details:`, error.toString());
     return false;
   }
 }
