@@ -273,13 +273,31 @@ function extractSpotifyEpisodeInfo(episodeUrl, retryCount = 0) {
         // This regex matches the pattern and removes it, keeping only the actual description
         const cleanedDescription = rawDescription.replace(/^Listen to this episode from .+ on Spotify\.\s*/i, '');
         
-        // Also handle HTML entities like &quot;
+        // Decode HTML entities comprehensively
         description = cleanedDescription
           .replace(/&quot;/g, '"')
           .replace(/&amp;/g, '&')
           .replace(/&lt;/g, '<')
           .replace(/&gt;/g, '>')
           .replace(/&nbsp;/g, ' ')
+          .replace(/&#x27;/g, "'")  // Single quote/apostrophe
+          .replace(/&#39;/g, "'")   // Alternative single quote
+          .replace(/&#x2F;/g, "/")  // Forward slash
+          .replace(/&#47;/g, "/")   // Alternative forward slash
+          .replace(/&#x2D;/g, "-")  // Hyphen/dash
+          .replace(/&#45;/g, "-")   // Alternative hyphen
+          .replace(/&#x21;/g, "!")  // Exclamation mark
+          .replace(/&#33;/g, "!")   // Alternative exclamation
+          .replace(/&#x3F;/g, "?")  // Question mark
+          .replace(/&#63;/g, "?")   // Alternative question mark
+          .replace(/&#x40;/g, "@")  // At symbol
+          .replace(/&#64;/g, "@")   // Alternative at symbol
+          .replace(/&#(\d+);/g, function(match, dec) {
+            return String.fromCharCode(dec);
+          })
+          .replace(/&#x([a-fA-F0-9]+);/g, function(match, hex) {
+            return String.fromCharCode(parseInt(hex, 16));
+          })
           .trim();
         
         // If the description is empty after cleaning, set to null
