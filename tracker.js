@@ -47,17 +47,22 @@ function syncRegionDirectly(region, limit = null) {
     
     const episodes = JSON.parse(response.getContentText());
     
-    // Apply limit if specified (for testing)
-    const episodesToProcess = limit ? episodes.slice(0, limit) : episodes;
-    console.log(`Fetched ${episodes.length} episodes for ${region.toUpperCase()}${limit ? ` (processing first ${limit})` : ''}`);
+        // Apply limit: max 250 episodes, or custom limit for testing
+    const maxEpisodes = limit || 250;
+    const episodesToProcess = episodes.slice(0, Math.min(episodes.length, maxEpisodes));
+    console.log(`Fetched ${episodes.length} episodes for ${region.toUpperCase()} (processing first ${episodesToProcess.length}, max ${maxEpisodes})`);
     
     // Sync each episode to Supabase
     let successCount = 0;
     let errorCount = 0;
     
     for (let i = 0; i < episodesToProcess.length; i++) {
-              const episode = episodesToProcess[i];
-        const rank = i + 1; // Array index + 1 = rank position
+      const episode = episodesToProcess[i];
+      const rankPosition = i + 1; // Array index + 1 = rank position
+      
+      // New scoring system: score = 250 - rank_position + 1
+      // Rank 1 (first place) = 250 points, Rank 250 (last) = 1 point
+      const score = 250 - rankPosition + 1;
         
         try {
           // Convert episode URI to Spotify URL and fetch episode details
@@ -72,7 +77,7 @@ function syncRegionDirectly(region, limit = null) {
         const episodeDetails = extractSpotifyEpisodeInfo(episodeUrl);
         
         const success = upsertEpisodeToSupabase({
-          rank: rank,
+          rank: score, // Now passing the calculated score instead of rank position
           episodeName: episode.episodeName,
           showName: episode.showName,
           episodeUri: episode.episodeUri,
