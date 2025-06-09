@@ -69,9 +69,9 @@ function syncRegionDirectly(region, limit = null) {
           const episodeUrl = convertSpotifyUriToUrl(episode.episodeUri);
           console.log(`Fetching details for episode ${i + 1}/${episodesToProcess.length}: ${episode.episodeName}`);
         
-        // Add delay before each Spotify request to avoid 403 errors
+        // Add minimal delay before each Spotify request to avoid 403 errors
         if (i > 0) {
-          Utilities.sleep(200); // 200ms delay between requests
+          Utilities.sleep(50); // 50ms delay between requests
         }
         
         const episodeDetails = extractSpotifyEpisodeInfo(episodeUrl);
@@ -100,9 +100,9 @@ function syncRegionDirectly(region, limit = null) {
       }
       
               // Small delay to avoid overwhelming both Spotify and Supabase
-        if (i % 5 === 0 && i > 0) {
+        if (i % 10 === 0 && i > 0) {
           console.log(`Processed ${i} episodes, pausing briefly...`);
-          Utilities.sleep(1000); // Longer pause every 5 episodes
+          Utilities.sleep(100); // Brief pause every 10 episodes
         }
     }
     
@@ -127,17 +127,17 @@ function syncRegionDirectly(region, limit = null) {
 
 function upsertEpisodeToSupabase(episode, region) {
   try {
-    // Prepare the payload for the upsert function
+    // Clean all text fields to prevent Unicode issues
     const payload = {
-      p_episode_uri: episode.episodeUri,
+      p_episode_uri: cleanUnicodeForDatabase(episode.episodeUri),
       p_rank: episode.rank,
-      p_episode_name: episode.episodeName,
-      p_show_name: episode.showName,
-      p_show_uri: episode.showUri,
+      p_episode_name: cleanUnicodeForDatabase(episode.episodeName),
+      p_show_name: cleanUnicodeForDatabase(episode.showName),
+      p_show_uri: cleanUnicodeForDatabase(episode.showUri),
       p_region: region,
-      p_show_description: episode.showDescription || '',
-      p_episode_description: episode.episodeDescription || null,
-      p_episode_duration: episode.episodeDuration || null
+      p_show_description: cleanUnicodeForDatabase(episode.showDescription || ''),
+      p_episode_description: episode.episodeDescription ? cleanUnicodeForDatabase(episode.episodeDescription) : null,
+      p_episode_duration: episode.episodeDuration ? cleanUnicodeForDatabase(episode.episodeDuration) : null
     };
     
     // Call Supabase RPC function
@@ -196,6 +196,21 @@ function testPodcastSync() {
   }
 }
 
+function cleanUnicodeForDatabase(text) {
+  if (!text || typeof text !== 'string') {
+    return text;
+  }
+  
+  return text
+    // Remove null characters and other control characters that cause database issues
+    .replace(/\u0000/g, '') // Null character
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '') // Other control characters
+    // Remove or replace other problematic Unicode sequences
+    .replace(/\uFEFF/g, '') // Byte order mark
+    .replace(/[\uD800-\uDFFF]/g, '') // Surrogate pairs (if unpaired)
+    .trim();
+}
+
 function convertSpotifyUriToUrl(uri) {
   // Convert spotify:episode:ID to https://open.spotify.com/episode/ID
   try {
@@ -216,7 +231,7 @@ function testExtractSpotifyEpisodeInfo() {
 }
 
 function extractSpotifyEpisodeInfo(episodeUrl, retryCount = 0) {
-  const maxRetries = 3;
+  const maxRetries = 1;
   
   try {
     if (!episodeUrl) {
@@ -235,7 +250,7 @@ function extractSpotifyEpisodeInfo(episodeUrl, retryCount = 0) {
     
     // Handle 403 errors with retry mechanism
     if (statusCode === 403 && retryCount < maxRetries) {
-      const retryDelay = (retryCount + 1) * 1000; // 1s, 2s, 3s delays
+      const retryDelay = 100; // 100ms delay for single retry
       console.warn(`403 error for ${episodeUrl}, retrying in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`);
       Utilities.sleep(retryDelay);
       return extractSpotifyEpisodeInfo(episodeUrl, retryCount + 1);
@@ -304,6 +319,9 @@ function extractSpotifyEpisodeInfo(episodeUrl, retryCount = 0) {
             return String.fromCharCode(parseInt(hex, 16));
           })
           .trim();
+        
+        // Clean problematic Unicode characters that cause database issues
+        description = cleanUnicodeForDatabase(description);
         
         // If the description is empty after cleaning, set to null
         if (!description || description.length === 0) {
